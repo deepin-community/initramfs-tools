@@ -63,7 +63,7 @@ add_firmware()
 
 	read -r fw_path_para < /sys/module/firmware_class/parameters/path
 
-	for suffix in "" ".xz"; do
+	for suffix in "" ".zst" ".xz"; do
 		if { [ -n "$fw_path_para" ] && [ -e "${DESTDIR}/${fw_path_para}/${firmware}${suffix}" ]; } \
 		|| [ -e "${DESTDIR}/lib/firmware/updates/${version?}/${firmware}${suffix}" ] \
 		|| [ -e "${DESTDIR}/lib/firmware/updates/${firmware}${suffix}" ] \
@@ -73,7 +73,7 @@ add_firmware()
 		fi
 	done
 
-	for suffix in "" ".xz"; do
+	for suffix in "" ".zst" ".xz"; do
 		[ -n "$fw_path_para" ] && path_firmware="${fw_path_para}/${firmware}${suffix}" || path_firmware=
 		for fwloc in "$path_firmware" \
 			"/lib/firmware/updates/${version}/${firmware}${suffix}" \
