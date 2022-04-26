@@ -28,7 +28,7 @@ force_load()
 }
 
 # Takes a file containing a list of modules to be added as an
-# argument, figures out dependancies, and adds them.
+# argument, figures out dependencies, and adds them.
 #
 # Input file syntax:
 #
@@ -57,18 +57,23 @@ add_modules_from_file()
 # whether a warning should be printed in that case.)
 add_firmware()
 {
-	local firmware fwloc
+	local firmware fwloc fw_path_para path_firmware
 
 	firmware="${1}"
 
-	if [ -e "${DESTDIR}/lib/firmware/updates/${version?}/${firmware}" ] \
+	read -r fw_path_para < /sys/module/firmware_class/parameters/path
+
+	if { [ -n "$fw_path_para" ] && [ -e "${DESTDIR}/${fw_path_para}/${firmware}" ]; } \
+	|| [ -e "${DESTDIR}/lib/firmware/updates/${version?}/${firmware}" ] \
 	|| [ -e "${DESTDIR}/lib/firmware/updates/${firmware}" ] \
 	|| [ -e "${DESTDIR}/lib/firmware/${version}/${firmware}" ] \
 	|| [ -e "${DESTDIR}/lib/firmware/${firmware}" ]; then
 		return 0
 	fi
 
-	for fwloc in "/lib/firmware/updates/${version}/${firmware}" \
+	[ -n "$fw_path_para" ] && path_firmware="${fw_path_para}/${firmware}" || path_firmware=
+	for fwloc in "$path_firmware" \
+		"/lib/firmware/updates/${version}/${firmware}" \
 		"/lib/firmware/updates/${firmware}" \
 		"/lib/firmware/${version}/${firmware}" \
 		"/lib/firmware/${firmware}"; do
