@@ -57,30 +57,34 @@ add_modules_from_file()
 # whether a warning should be printed in that case.)
 add_firmware()
 {
-	local firmware fwloc fw_path_para path_firmware
+	local firmware suffix fwloc fw_path_para path_firmware
 
 	firmware="${1}"
 
 	read -r fw_path_para < /sys/module/firmware_class/parameters/path
 
-	if { [ -n "$fw_path_para" ] && [ -e "${DESTDIR}/${fw_path_para}/${firmware}" ]; } \
-	|| [ -e "${DESTDIR}/lib/firmware/updates/${version?}/${firmware}" ] \
-	|| [ -e "${DESTDIR}/lib/firmware/updates/${firmware}" ] \
-	|| [ -e "${DESTDIR}/lib/firmware/${version}/${firmware}" ] \
-	|| [ -e "${DESTDIR}/lib/firmware/${firmware}" ]; then
-		return 0
-	fi
-
-	[ -n "$fw_path_para" ] && path_firmware="${fw_path_para}/${firmware}" || path_firmware=
-	for fwloc in "$path_firmware" \
-		"/lib/firmware/updates/${version}/${firmware}" \
-		"/lib/firmware/updates/${firmware}" \
-		"/lib/firmware/${version}/${firmware}" \
-		"/lib/firmware/${firmware}"; do
-		if [ -e "$fwloc" ]; then
-			copy_file firmware "$fwloc"
+	for suffix in "" ".xz"; do
+		if { [ -n "$fw_path_para" ] && [ -e "${DESTDIR}/${fw_path_para}/${firmware}${suffix}" ]; } \
+		|| [ -e "${DESTDIR}/lib/firmware/updates/${version?}/${firmware}${suffix}" ] \
+		|| [ -e "${DESTDIR}/lib/firmware/updates/${firmware}${suffix}" ] \
+		|| [ -e "${DESTDIR}/lib/firmware/${version}/${firmware}${suffix}" ] \
+		|| [ -e "${DESTDIR}/lib/firmware/${firmware}${suffix}" ]; then
 			return 0
 		fi
+	done
+
+	for suffix in "" ".xz"; do
+		[ -n "$fw_path_para" ] && path_firmware="${fw_path_para}/${firmware}${suffix}" || path_firmware=
+		for fwloc in "$path_firmware" \
+			"/lib/firmware/updates/${version}/${firmware}${suffix}" \
+			"/lib/firmware/updates/${firmware}${suffix}" \
+			"/lib/firmware/${version}/${firmware}${suffix}" \
+			"/lib/firmware/${firmware}${suffix}"; do
+			if [ -e "$fwloc" ]; then
+				copy_file firmware "$fwloc"
+				return 0
+			fi
+		done
 	done
 
 	# We can't figure out where to get that firmware from.
