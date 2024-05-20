@@ -25,8 +25,16 @@ Description: generic modular initramfs generator (automation)
 Package: initramfs-tools-core
 Architecture: all
 Multi-Arch: foreign
-Recommends: ${busybox:Recommends}, zstd
-Depends: klibc-utils (>= 2.0.4-8~), cpio (>= 2.12), kmod, udev, coreutils (>= 8.24), logsave | e2fsprogs (<< 1.45.3-1~), ${misc:Depends}
+Recommends: ${busybox:Recommends}
+Depends: coreutils (>= 8.24),
+         cpio (>= 2.12),
+         dracut-install,
+         klibc-utils (>= 2.0.4-8~),
+         kmod,
+         logsave | e2fsprogs (<< 1.45.3-1~),
+         udev,
+         zstd,
+         ${misc:Depends}
 Suggests: bash-completion
 Breaks: initramfs-tools (<< 0.121~), ${busybox:Breaks}
 Replaces: initramfs-tools (<< 0.121~)

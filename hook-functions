@@ -85,47 +85,20 @@ add_firmware()
 # Add dependent modules + eventual firmware
 manual_add_modules()
 {
-	local prefix kmod options firmware
+	local dracut_verbose fw_path_para
 
 	if [ $# -eq 0 ]; then
 		return
 	fi
 
-	# modprobe --ignore-install inhibits processing of 'install'
-	# configuration lines, so that instead we will see 'insmod
-	# module.ko' as we want.  However it also means that 'softdep'
-	# configuration lines and embedded softdep information is not
-	# processed.  So we run twice, with and without this option.
-	# shellcheck disable=SC2034
-	{ /sbin/modprobe --all --set-version="${version?}" --ignore-install --quiet --show-depends "$@";
-	  /sbin/modprobe --all --set-version="${version}" --quiet --show-depends "$@"; } |
-	while read -r prefix kmod options ; do
-		if [ "${prefix}" != "insmod" ]; then
-			continue
-		fi
+	if [ "${verbose?}" = "y" ]; then
+		dracut_verbose=-v
+	fi
 
-		copy_file module "${kmod}" || continue
-
-		# Add required firmware
-		for firmware in $(modinfo -k "${version}" -F firmware "${kmod}"); do
-			# Only print warning for missing fw of loaded module
-			# or forced loaded module
-			if ! add_firmware "$firmware"; then
-				# Only warn about missing firmware if
-				# /proc/modules exists
-				if [ ! -e /proc/modules ] ; then
-					continue
-				fi
-
-				kmod_modname="${kmod##*/}"
-				kmod_modname="${kmod_modname%%.*}"
-				if grep -q "^$kmod_modname\\>" /proc/modules "${CONFDIR}/modules"; then
-					echo "W: Possible missing firmware /lib/firmware/${firmware} for module ${kmod_modname}" >&2
-				fi
-				continue
-			fi
-		done
-	done
+	read -r fw_path_para < /sys/module/firmware_class/parameters/path
+	/usr/lib/dracut/dracut-install -D "$DESTDIR" --kerneldir "/lib/modules/${version?}" \
+		--firmwaredirs "${fw_path_para:+${fw_path_para}:}/lib/firmware/updates/${version?}:/lib/firmware/updates:/lib/firmware/${version?}:/lib/firmware" \
+		${dracut_verbose-} -o -m "$@"
 }
 
 # manual_add_modules() takes care of adding firmware for things that were built
