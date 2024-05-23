@@ -543,6 +543,25 @@ dep_add_modules()
 		fi
 	done
 
+	# It's possible that a generic framebuffer device works, but is taken
+	# over by a more capable driver and no longer available in /sys. We
+	# have no reliable consistent way to detect that, so apply heuristics.
+	case "$(uname -m)" in
+		i386|i686|x86_64) walk_graphics=no ;;
+	esac
+
+	if [ -d "/sys/firmware/efi/efivars" ]; then
+		walk_graphics=no
+	fi
+
+	for node in /sys/firmware/devicetree/base/chosen/framebuffer@*; do
+		if [ -d "$node" ] && grep -qz '^simple-framebuffer$' "$node/compatible"; then
+			if [ ! -f "$node/status" ] || grep -qz '^\(okay\|ok\)$' "$node/status"; then
+				walk_graphics=no
+			fi
+		fi
+	done
+
 	if [ "$walk_graphics" = "yes" ]; then
 		class_add_modules backlight
 		class_add_modules graphics
