@@ -83,7 +83,24 @@ add_firmware()
 }
 
 # Add dependent modules + eventual firmware
+# This function was changed to only collect the wanted kernel modules.
+# Call apply_add_modules to copy the kernel modules.
 manual_add_modules()
+{
+	for module in "$@"; do
+		echo "$module" >> "$__MODULES_TO_ADD"
+	done
+}
+
+# Copy the kernel modules that were marked in manual_add_modules
+apply_add_modules()
+{
+	# shellcheck disable=SC2046
+	_call_dracut_install $(sort -u "$__MODULES_TO_ADD")
+	true > "$__MODULES_TO_ADD"
+}
+
+_call_dracut_install()
 {
 	local dracut_verbose fw_path_para
 
@@ -711,7 +728,7 @@ auto_add_modules()
 hidden_dep_add_modules()
 {
 	# shellcheck disable=SC2046
-	manual_add_modules $(
+	_call_dracut_install $(
 		{
 			cat "${DESTDIR}/lib/modules/${version}/modules.builtin"
 			if [ -d "${DESTDIR}/lib/modules/${version}/kernel" ]; then
