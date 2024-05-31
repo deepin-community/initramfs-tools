@@ -261,6 +261,8 @@ DESTDIR=
 __TMPCPIOGZ=
 __TMPMAINCPIO=
 __TMPEARLYCPIO=
+__MODULES_TO_ADD=
+# shellcheck disable=SC2317
 clean_on_exit() {
 	if [ "${keep}" = "y" ]; then
 		echo "Working files in ${DESTDIR:-<not yet created>}," \
@@ -268,7 +270,7 @@ clean_on_exit() {
 			"main initramfs in ${__TMPMAINCPIO:-<not yet created>} and" \
 			"overlay in ${__TMPCPIOGZ:-<not yet created>}"
 	else
-		for path in "${DESTDIR}" "${__TMPCPIOGZ}" "${__TMPMAINCPIO}" "${__TMPEARLYCPIO}"; do
+		for path in "${DESTDIR}" "${__TMPCPIOGZ}" "${__TMPMAINCPIO}" "${__TMPEARLYCPIO}" "${__MODULES_TO_ADD}"; do
 			test -z "${path}" || rm -rf "${path}"
 		done
 	fi
@@ -283,6 +285,7 @@ chmod 755 "${DESTDIR}"
 __TMPCPIOGZ="$(mktemp "${TMPDIR:-/var/tmp}/mkinitramfs-OL_XXXXXX")" || exit 1
 __TMPMAINCPIO="$(mktemp "${TMPDIR:-/var/tmp}/mkinitramfs-MAIN_XXXXXX")" || exit 1
 __TMPEARLYCPIO="$(mktemp "${TMPDIR:-/var/tmp}/mkinitramfs-FW_XXXXXX")" || exit 1
+__MODULES_TO_ADD="$(mktemp "${TMPDIR:-/var/tmp}/modules_XXXXXX")" || exit 1
 
 DPKG_ARCH=$(dpkg --print-architecture)
 
@@ -305,6 +308,9 @@ export __TMPCPIOGZ
 
 # Private, used by 'prepend_earlyinitramfs'.
 export __TMPEARLYCPIO
+
+# Private, used by 'manual_add_modules'.
+export __MODULES_TO_ADD
 
 # Create usr-merged filesystem layout, to avoid duplicates if the host
 # filesystem is usr-merged.
@@ -409,6 +415,8 @@ for file in /etc/modprobe.d/*.conf /lib/modprobe.d/*.conf ; do
 	fi
 done
 
+# Copy kernel modules here, because some hooks rely on them being copied
+apply_add_modules
 run_scripts /usr/share/initramfs-tools/hooks
 run_scripts "${CONFDIR}"/hooks
 
@@ -416,6 +424,10 @@ run_scripts "${CONFDIR}"/hooks
 for b in $(cd "${DESTDIR}/scripts" && find . -mindepth 1 -type d); do
 	cache_run_scripts "${DESTDIR}" "/scripts/${b#./}"
 done
+
+apply_add_modules
+# Resolve hidden dependencies
+hidden_dep_add_modules
 
 # decompress modules for boot speed, if possible
 find "${DESTDIR}/${MODULESDIR}" -name '*.ko.*' | while read -r ko; do
