@@ -623,14 +623,14 @@ auto_add_modules()
 			copy_modules_dir kernel/drivers/usb/host \
 				hwa-hc.ko sl811_cs.ko sl811-hcd.ko \
 				u132-hcd.ko whci-hcd.ko
-			copy_modules_dir kernel/drivers/usb/c67x00
-			copy_modules_dir kernel/drivers/usb/chipidea
-			copy_modules_dir kernel/drivers/usb/dwc2
-			copy_modules_dir kernel/drivers/usb/dwc3
-			copy_modules_dir kernel/drivers/usb/isp1760
-			copy_modules_dir kernel/drivers/usb/musb
-			copy_modules_dir kernel/drivers/usb/renesas_usbhs
-			copy_modules_dir kernel/drivers/usb/typec/tcpm
+			modules="$modules =drivers/usb/c67x00"
+			modules="$modules =drivers/usb/chipidea"
+			modules="$modules =drivers/usb/dwc2"
+			modules="$modules =drivers/usb/dwc3"
+			modules="$modules =drivers/usb/isp1760"
+			modules="$modules =drivers/usb/musb"
+			modules="$modules =drivers/usb/renesas_usbhs"
+			modules="$modules =drivers/usb/typec/tcpm"
 			# and any extcon drivers for USB
 			modules="$modules extcon-usb-gpio extcon-usbc-cros-ec"
 			# Add the axp20x_usb_power power supply driver,
@@ -642,7 +642,7 @@ auto_add_modules()
 			# unless we're sure they don't support keyboards.
 			# hid-*ff covers various game controllers with
 			# force feedback.
-			copy_modules_dir kernel/drivers/input/keyboard
+			modules="$modules =drivers/input/keyboard"
 			copy_modules_dir kernel/drivers/hid \
 				'hid-*ff.ko' hid-a4tech.ko hid-cypress.ko \
 				hid-dr.ko hid-elecom.ko hid-gyration.ko \
@@ -660,22 +660,22 @@ auto_add_modules()
 			modules="$modules cros_ec_spi"
 
 			# Any of these might be needed by other drivers
-			copy_modules_dir kernel/drivers/bus
-			copy_modules_dir kernel/drivers/clk
-			copy_modules_dir kernel/drivers/gpio
-			copy_modules_dir kernel/drivers/i2c/busses
-			copy_modules_dir kernel/drivers/i2c/muxes
-			copy_modules_dir kernel/drivers/mfd
-			copy_modules_dir kernel/drivers/pci/controller
-			copy_modules_dir kernel/drivers/phy
-			copy_modules_dir kernel/drivers/pinctrl
-			copy_modules_dir kernel/drivers/regulator
-			copy_modules_dir kernel/drivers/reset
-			copy_modules_dir kernel/drivers/spi
-			copy_modules_dir kernel/drivers/usb/phy
+			modules="$modules =drivers/bus"
+			modules="$modules =drivers/clk"
+			modules="$modules =drivers/gpio"
+			modules="$modules =drivers/i2c/busses"
+			modules="$modules =drivers/i2c/muxes"
+			modules="$modules =drivers/mfd"
+			modules="$modules =drivers/pci/controller"
+			modules="$modules =drivers/phy"
+			modules="$modules =drivers/pinctrl"
+			modules="$modules =drivers/regulator"
+			modules="$modules =drivers/reset"
+			modules="$modules =drivers/spi"
+			modules="$modules =drivers/usb/phy"
 
 			# Needed for periodic fsck
-			copy_modules_dir kernel/drivers/rtc
+			modules="$modules =drivers/rtc"
 		;;
 		net)
 			copy_modules_dir kernel/drivers/net \
@@ -694,22 +694,22 @@ auto_add_modules()
 			modules="$modules nvmem-imx-ocotp"
 		;;
 		ide)
-			copy_modules_dir kernel/drivers/ide
+			modules="$modules =drivers/ide"
 		;;
 		mmc)
-			copy_modules_dir kernel/drivers/mmc
+			modules="$modules =drivers/mmc"
 		;;
 		scsi)
-			copy_modules_dir kernel/drivers/scsi
-			copy_modules_dir kernel/drivers/ufs
+			modules="$modules =drivers/scsi"
+			modules="$modules =drivers/ufs"
 			modules="$modules mptfc mptsas mptscsih mptspi zfcp"
 		;;
 		ata)
-			copy_modules_dir kernel/drivers/ata
+			modules="$modules =drivers/ata"
 		;;
 		block)
-			copy_modules_dir kernel/drivers/block
-			copy_modules_dir kernel/drivers/nvme
+			modules="$modules =drivers/block"
+			modules="$modules =drivers/nvme"
 			modules="$modules vmd"
 		;;
 		ubi)
@@ -722,7 +722,7 @@ auto_add_modules()
 			modules="$modules dasd_diag_mod dasd_eckd_mod dasd_fba_mod"
 		;;
 		usb_storage)
-			copy_modules_dir kernel/drivers/usb/storage
+			modules="$modules =drivers/usb/storage"
 		;;
 		fb)
 			# For machines that don't have a generic framebuffer device.
