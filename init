@@ -58,6 +58,8 @@ export ROOTFLAGS=
 export ROOTFSTYPE=
 export IP=
 export DEVICE=
+export OSTREE=
+export DATADEV=
 export BOOT=
 export BOOTIF=
 export UBIMTD=
@@ -120,6 +122,12 @@ for x in $(cat /proc/cmdline); do
 		;;
 	ip=*)
 		IP="${x#ip=}"
+		;;
+	ostree=*)
+		OSTREE="${x#ostree=}"
+		;;
+	persistent=*)
+		DATADEV="${x#persistent=}"
 		;;
 	boot=*)
 		BOOT=${x#boot=}
@@ -307,6 +315,8 @@ unset IP
 unset BOOT
 unset BOOTIF
 unset DEVICE
+unset OSTREE
+unset DATADEV
 unset UBIMTD
 unset blacklist
 unset break
