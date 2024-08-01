@@ -1,3 +1,14 @@
+initramfs-tools (0.142-0deepin1) unstable; urgency=medium
+
+  * Backport patches from 0.143 as we are locked in on 0.142.
+  * Use dracut-install to install modules, resolving an issue in which
+    symlinks were resolved into normal files, causing duplicates and inflated
+    initramfs sizes (since NVIDIA GSP introduction in 6.7).
+  * Add support for compressed firmware data.
+  * Declare zstd as a dependency as we don't install Recommends by default.
+
+ -- Mingcong Bai <baimingcong@uniontech.com>  Thu, 01 Aug 2024 14:40:44 +0800
+
 initramfs-tools (0.142) unstable; urgency=medium
 
   [ Dan Streetman ]
