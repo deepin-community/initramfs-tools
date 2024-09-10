@@ -627,7 +627,6 @@ auto_add_modules()
 			modules="$modules nfs nfsv2 nfsv3 nfsv4"
 			modules="$modules af_packet atkbd i8042 psmouse"
 			modules="$modules virtio_pci virtio_mmio"
-			modules="$modules overlay"
 
 			# Include most USB host and dual-role drivers
 			copy_modules_dir kernel/drivers/usb/host \

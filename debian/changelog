@@ -1,9 +1,3 @@
-initramfs-tools (0.142-0deepin2) unstable; urgency=medium
-
-  * Add startup process for systems built on ostree
-
- -- xiamengliang <xiamengliang@uniontech.com>  Thu, 08 Aug 2024 13:38:14 +0800
-
 initramfs-tools (0.142-0deepin1) unstable; urgency=medium
 
   * Backport patches from 0.143 as we are locked in on 0.142.
