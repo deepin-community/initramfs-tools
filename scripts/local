@@ -141,47 +141,6 @@ local_device_setup()
 	DEV="${real_dev}"
 }
 
-ext_mount() {
-    persistent_device=$1
-    [ ! -d /persistent ] && mkdir /persistent
-    # mount $persistent_device /persistent
-    mount --make-private /persistent
-
-    local lowerdir=$2
-
-	local extDeploy=$(realpath /persistent/$OSTREE)
-
-    # mount $persistent_device $lowerdir/persistent
-
-    # /persistent/sysroot /persistent/deplay /persistent/overlay
-    [ ! -d /persistent/overlay/work ] && mkdir -p /persistent/overlay/work
-    [ ! -d /persistent/overlay/merged ] && mkdir -p /persistent/overlay/merged
-
-	local otDeploy=/persistent/overlay/merged
-
-    # [ ! -d /overlay ] && mkdir /overlay
-	modprobe overlay
-    mount -t overlay -o lowerdir="$lowerdir",upperdir="$extDeploy",workdir="/persistent/overlay/work" overlay $otDeploy
-	mount --make-private $otDeploy
-
-    mount -o bind,rw $otDeploy/etc $otDeploy/etc
-
-	mount --bind /persistent/ostree/deploy/deepin/var $otDeploy/var
-    #mount -o bind,rw $otDeploy/var $otDeploy/var
-	mkdir -p "$otDeploy/var/roothome" "$otDeploy/var/mnt" "$otDeploy/var/opt" "$otDeploy/var/home" || true
-
-	mount -o bind $otDeploy/usr $otDeploy/usr
-	mount --bind -o remount,ro $otDeploy/usr $otDeploy/usr
-
-	mount -o bind,rw /persistent $otDeploy/persistent
-
-	mount -o bind $rootmnt $otDeploy/sysroot
-	mount --bind -o remount,ro $otDeploy/sysroot $otDeploy/sysroot
-
-    # chroot to /overlay and start init
-    mount --make-private $rootmnt
-    mount --move $otDeploy $rootmnt
-}
 local_mount_root()
 {
 	local_top
@@ -212,31 +171,6 @@ local_mount_root()
 	# shellcheck disable=SC2086
 	if ! mount ${roflag} ${FSTYPE:+-t "${FSTYPE}"} ${ROOTFLAGS} "${ROOT}" "${rootmnt?}"; then
 		panic "Failed to mount ${ROOT} as root file system."
-	fi
-
-	if [ -n "${OSTREE}" ];then
-		mount -o remount,rw "${rootmnt?}"
-		real_dev=$(resolve_device "${DATADEV}")
-		printf "real_dev=$real_dev"
-
-		[ ! -d /persistent ] && mkdir /persistent
-		mount $real_dev /persistent
-
-		local extDeploy=$(realpath /persistent/$OSTREE)
-		#ext_commit=$(ostree --repo=/persistent/ostree/repo log deepin/23/x86_64/desktop | grep commit | head -n 1| awk '{print $2}')
-		local sys_commit_idx=$(cat $extDeploy/usr/ostree-parent)
-
-		#bootID=$(echo "$rootmnt"/ostree/boot.1/deepin/*/0)
-		#bootID=${bootID#"$rootmnt"}
-		#printf "bootID=$bootID"
-		#realdeploy=$(realpath "$rootmnt/${bootID}")
-		#realdeploy=$rootmnt/ostree/deploy/deepin/deploy/$sys_commit_idx
-		#osname=deepin
-		sysroot="$rootmnt"
-		ostree=/ostree/deploy/deepin/deploy/$sys_commit_idx
-		
-		ext_mount "$real_dev" "$sysroot$ostree"
-		printf 'sysroot-ro\x00\x00\x00\x00\x00\x00\x01\x00\x62\x0b\x14' > /run/ostree-booted
 	fi
 }
 
