@@ -121,6 +121,11 @@ for x in $(cat /proc/cmdline); do
 	ip=*)
 		IP="${x#ip=}"
 		;;
+	ostree=*)
+		if [ -z "${BOOT}" ] && [ -f /scripts/ostree ];then
+			BOOT=ostree
+		fi
+		;;
 	boot=*)
 		BOOT=${x#boot=}
 		;;
