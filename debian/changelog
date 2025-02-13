@@ -1,3 +1,12 @@
+initramfs-tools (0.142-0deepin4) unstable; urgency=medium
+
+  * Merge v20 patch:
+  * cancel resume prompt;add fsck boot support;
+  * fix ldd fail;fix mul update-initramfs process fail;
+  * wait udev in s4
+
+ -- xinpeng.wang <wangxinpeng@uniontech.com>  Thu, 13 Feb 2025 13:33:17 +0800
+
 initramfs-tools (0.142-0deepin3) unstable; urgency=medium
 
   * Start from the ostree script when there are ostree parameters in cmdline
