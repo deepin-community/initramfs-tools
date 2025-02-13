@@ -1,0 +1,13 @@
+Index: deepin-initramfs-tools/hook-functions
+===================================================================
+--- deepin-initramfs-tools.orig/hook-functions	2025-02-12 18:21:15.678113198 +0800
++++ deepin-initramfs-tools/hook-functions	2025-02-13 11:31:38.518645207 +0800
+@@ -229,6 +229,8 @@
+ 	for x in $(env --unset=LD_PRELOAD ldd "${src}" 2>/dev/null | sed -e '
+ 		/\//!d;
+ 		/linux-gate/d;
++		/cannot be preloaded/d;
++		/not found/d;
+ 		/=>/ {s/.*=>[[:blank:]]*\([^[:blank:]]*\).*/\1/};
+ 		s/[[:blank:]]*\([^[:blank:]]*\) (.*)/\1/' 2>/dev/null); do
+ 

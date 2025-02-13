@@ -1,0 +1,12 @@
+Index: deepin-initramfs-tools/hooks/fsck
+===================================================================
+--- deepin-initramfs-tools.orig/hooks/fsck	2025-02-12 18:21:15.678113198 +0800
++++ deepin-initramfs-tools/hooks/fsck	2025-02-13 10:15:48.179354337 +0800
+@@ -67,6 +67,7 @@
+ 	if [ "${FSTYPE:-auto}" = auto ]; then
+ 		get_fsck_type_fstab /    root
+ 		get_fsck_type_fstab /usr usr
++		get_fsck_type_fstab /boot /boot
+ 	else
+ 		local IFS=,
+ 		local fstype

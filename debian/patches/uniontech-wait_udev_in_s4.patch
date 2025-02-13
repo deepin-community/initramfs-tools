@@ -1,0 +1,14 @@
+Index: deepin-initramfs-tools/scripts/local-premount/resume
+===================================================================
+--- deepin-initramfs-tools.orig/scripts/local-premount/resume	2025-02-13 11:21:03.969009168 +0800
++++ deepin-initramfs-tools/scripts/local-premount/resume	2025-02-13 12:02:11.507899516 +0800
+@@ -26,6 +26,9 @@
+ 	exit 0
+ fi
+ 
++if [ "$(get_fstype "${DEV}")" = suspend ]; then
++	udevadm settle
++fi
+ 
+ # hardcode path, uswsusp ships an resume binary too
+ if [ -n "${resume_offset?}" ]; then

@@ -1,0 +1,5 @@
+uniontech-add-fsck-boot-support.patch
+uniontech-cancel-the-S4-wake-up-prompt.patch
+uniontech-fix-ldd-fail.patch
+uniontech-fix-mul-update-initramfs-process.patch
+uniontech-wait_udev_in_s4.patch
