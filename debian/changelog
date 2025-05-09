@@ -1,3 +1,9 @@
+initramfs-tools (0.142-0deepin5) unstable; urgency=medium
+
+  * support fix-init.
+
+ -- xinpeng.wang <wangxinpeng@uniontech.com>  Fri, 09 May 2025 19:44:46 +0800
+
 initramfs-tools (0.142-0deepin4) unstable; urgency=medium
 
   * Merge v20 patch:
