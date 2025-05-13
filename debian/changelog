@@ -1,3 +1,10 @@
+initramfs-tools (0.142-0deepin6) unstable; urgency=medium
+
+  * uos does not allow modifying init without turning on grub 
+  * compilation verification.
+
+ -- xinpeng.wang <wangxinpeng@uniontech.com>  Tue, 13 May 2025 19:40:32 +0800
+
 initramfs-tools (0.142-0deepin5) unstable; urgency=medium
 
   * support fix-init.
