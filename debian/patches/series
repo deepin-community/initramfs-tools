@@ -5,3 +5,4 @@ uniontech-fix-mul-update-initramfs-process.patch
 uniontech-wait_udev_in_s4.patch
 uniontech-support-fix-init.patch
 uniontech-check-init.patch
+uniontech-not-wait-udev.patch
