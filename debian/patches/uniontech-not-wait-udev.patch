@@ -1,0 +1,27 @@
+Index: deepin-initramfs-tools/scripts/functions
+===================================================================
+--- deepin-initramfs-tools.orig/scripts/functions	2025-05-28 14:34:35.000000000 +0800
++++ deepin-initramfs-tools/scripts/functions	2025-05-28 14:35:11.267074420 +0800
+@@ -144,7 +144,8 @@
+ 				continue
+ 			fi
+ 			# shellcheck disable=SC2086
+-			/sbin/modprobe $m
++			# add & to improve boot performance
++			/sbin/modprobe $m &
+ 		done < /conf/modules
+ 	fi
+ }
+@@ -393,8 +394,10 @@
+ # Wait for queued kernel/udev events
+ wait_for_udev()
+ {
+-	command -v udevadm >/dev/null 2>&1 || return 0
+-	udevadm settle ${1:+--timeout=$1}
++	# Not wait for udev to improve boot performance
++	return 0
++	# command -v udevadm >/dev/null 2>&1 || return 0
++	# udevadm settle ${1:+--timeout=$1}
+ }
+ 
+ # Find a specific fstab entry
