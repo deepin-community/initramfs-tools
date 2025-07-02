@@ -1,9 +1,3 @@
-initramfs-tools (0.142-0deepin7) unstable; urgency=medium
-
-  * not wait udev to improve boot performance.
-
- -- xinpeng.wang <wangxinpeng@uniontech.com>  Wed, 28 May 2025 14:30:46 +0800
-
 initramfs-tools (0.142-0deepin6) unstable; urgency=medium
 
   * uos does not allow modifying init without turning on grub 
