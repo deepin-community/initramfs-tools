@@ -1,4 +1,5 @@
 # -*- shell-script -*-
+# shellcheck shell=sh
 
 catenate_cpiogz() {
 	# Sanity check
@@ -57,38 +58,37 @@ add_modules_from_file()
 # whether a warning should be printed in that case.)
 add_firmware()
 {
-	local firmware suffix fwloc fw_path_para path_firmware
+	local firmware found_fwloc fwloc fw_path_para path suffix
 
 	firmware="${1}"
 
-	read -r fw_path_para < /sys/module/firmware_class/parameters/path
+	if [ -e /sys/module/firmware_class/parameters/path ]; then
+		read -r fw_path_para < /sys/module/firmware_class/parameters/path
+	fi
 
 	for suffix in "" ".zst" ".xz"; do
-		if { [ -n "$fw_path_para" ] && [ -e "${DESTDIR}/${fw_path_para}/${firmware}${suffix}" ]; } \
-		|| [ -e "${DESTDIR}/lib/firmware/updates/${version?}/${firmware}${suffix}" ] \
-		|| [ -e "${DESTDIR}/lib/firmware/updates/${firmware}${suffix}" ] \
-		|| [ -e "${DESTDIR}/lib/firmware/${version}/${firmware}${suffix}" ] \
-		|| [ -e "${DESTDIR}/lib/firmware/${firmware}${suffix}" ]; then
-			return 0
-		fi
-	done
-
-	for suffix in "" ".zst" ".xz"; do
-		[ -n "$fw_path_para" ] && path_firmware="${fw_path_para}/${firmware}${suffix}" || path_firmware=
-		for fwloc in "$path_firmware" \
-			"/lib/firmware/updates/${version}/${firmware}${suffix}" \
-			"/lib/firmware/updates/${firmware}${suffix}" \
-			"/lib/firmware/${version}/${firmware}${suffix}" \
-			"/lib/firmware/${firmware}${suffix}"; do
-			if [ -e "$fwloc" ]; then
-				copy_file firmware "$fwloc"
+		for path in ${fw_path_para:+"$fw_path_para"} \
+			"/lib/firmware/updates/${version?}" \
+			"/lib/firmware/updates" \
+			"/lib/firmware/${version}" \
+			"/lib/firmware"; do
+			fwloc="${path}/${firmware}${suffix}"
+			if [ -e "${DESTDIR}${fwloc}" ]; then
+				# DESTDIR already contains a matching firmware file.
 				return 0
+			fi
+			if [ -z "${found_fwloc}" ] && [ -e "${fwloc}" ]; then
+				found_fwloc="$fwloc"
 			fi
 		done
 	done
 
-	# We can't figure out where to get that firmware from.
-	return 1
+	if [ -z "${found_fwloc}" ]; then
+		# We can't figure out where to get that firmware from.
+		return 1
+	fi
+
+	copy_file firmware "${found_fwloc}"
 }
 
 # Add dependent modules + eventual firmware
@@ -105,7 +105,7 @@ manual_add_modules()
 apply_add_modules()
 {
 	# shellcheck disable=SC2046
-	_call_dracut_install $(sort -u "$__MODULES_TO_ADD")
+	_call_dracut_install $(sort -u "$__MODULES_TO_ADD") || return $?
 	true > "$__MODULES_TO_ADD"
 }
 
@@ -121,7 +121,9 @@ _call_dracut_install()
 		dracut_verbose=-v
 	fi
 
-	read -r fw_path_para < /sys/module/firmware_class/parameters/path
+	if [ -e /sys/module/firmware_class/parameters/path ]; then
+		read -r fw_path_para < /sys/module/firmware_class/parameters/path
+	fi
 	/usr/lib/dracut/dracut-install -D "$DESTDIR" --kerneldir "/lib/modules/${version?}" \
 		--firmwaredirs "${fw_path_para:+${fw_path_para}:}/lib/firmware/updates/${version?}:/lib/firmware/updates:/lib/firmware/${version?}:/lib/firmware" \
 		${dracut_verbose-} -o -m "$@"
@@ -152,12 +154,28 @@ add_builtin_firmware()
 	done
 }
 
-# $1 = file type (for logging)
-# $2 = file to copy to initramfs
-# $3 (optional) Name for the file on the initramfs
-# Location of the image dir is assumed to be $DESTDIR
-# If the target exists, we leave it and return 1.
-# On any other error, we return >1.
+# Copy a file to the initramfs:
+# $1 = file type, for debug logging
+# $2 = source file name
+# $3 (optional) = target file or directory name in the initramfs
+#
+# * If the target is not specified, it defaults to the source file
+#   name.
+# * If the target is specified and exists as a directory under
+#   $DESTDIR or ends in a slash, the basename of the source is
+#   appended to it.
+#
+# The target file's containing directories are created if necessary.
+#
+# If the source file name includes a symlink, other than usr-merge
+# symlinks, and the canonical name of the source is not the same as
+# the target, the source file is copied to its canonical name in the
+# initramfs and the target is created as a symlink.
+#
+# Returns:
+# * If the file was copied successfully, 0
+# * If the target file already existed, 1
+# * On error, >1
 copy_file() {
 	local type src target link_target
 
@@ -167,11 +185,20 @@ copy_file() {
 
 	[ -f "${src}" ] || return 2
 
-	if [ -d "${DESTDIR}/${target}" ]; then
+	if [ -d "${DESTDIR}/${target}" ] || [ "${target%/}" != "$target" ]; then
 		target="${target}/${src##*/}"
 	fi
 
-	# Canonicalise usr-merged target directories
+	# Canonicalise target to be absolute, so the comparisons below
+	# will work
+	target="$(realpath -ms "/${target}")" || return 2
+
+	# Canonicalise usr-merged directories
+	case "${src}" in
+	/bin/* | /lib* | /sbin/*)
+		[ "$(readlink -f /bin)" = /usr/bin ] && src="/usr${src}"
+		;;
+	esac
 	case "${target}" in
 	/bin/* | /lib* | /sbin/*) target="/usr${target}" ;;
 	esac
@@ -181,11 +208,12 @@ copy_file() {
 
 	mkdir -p "${DESTDIR}/${target%/*}"
 
-	if [ -h "${src}" ]; then
-		# We don't need to replicate a chain of links completely;
-		# just link directly to the ultimate target
-		link_target="$(readlink -f "${src}")" || return $(($? + 1))
-
+	# Check whether source or one of its ancestors is a symlink.
+	# If so, copy the symlink target and make the target a symlink
+	# too.  We don't need to replicate a chain of links completely;
+	# just link directly to the ultimate target.
+	link_target="$(readlink -f "${src}")" || return $(($? + 1))
+	if [ "${link_target}" != "$(realpath -s "$src")" ]; then
 		# Update source for the copy
 		src="${link_target}"
 
@@ -213,10 +241,16 @@ copy_file() {
 	cp -pP "${src}" "${DESTDIR}/${target}" || return $(($? + 1))
 }
 
-# $1 = executable/shared library to copy to initramfs, with dependencies
-# $2 (optional) Name for the file on the initramfs
-# Location of the image dir is assumed to be $DESTDIR
-# We never overwrite the target if it exists.
+# Copy an executable or shared library to the initramfs:
+# $1 = source file name
+# $2 (optional) = target file or directory name in the initramfs
+#
+# The source and all its shared library dependencies are copied
+# using copy_file.
+#
+# Returns:
+# * If the files were copied successfully or already exited, 0
+# * On error, >0
 copy_exec() {
 	local src target x nonoptlib ret
 
@@ -227,6 +261,7 @@ copy_exec() {
 
 	# Copy the dependant libraries
 	for x in $(env --unset=LD_PRELOAD ldd "${src}" 2>/dev/null | sed -e '
+		/^[^\t]/d;
 		/\//!d;
 		/linux-gate/d;
 		/=>/ {s/.*=>[[:blank:]]*\([^[:blank:]]*\).*/\1/};
@@ -245,7 +280,7 @@ copy_exec() {
 		# Handle common dlopen() dependency (Debian bug #950254)
 		case "${x}" in
 		*/libpthread.so.*)
-			copy_libgcc "${x%/*}" || return
+			copy_libgcc || return
 			;;
 		esac
 
@@ -256,12 +291,20 @@ copy_exec() {
 	done
 }
 
+# Copy libgcc_s.so for the running architecture to the initramfs.
+# This function takes no parameter.
+#
+# Returns:
+# * If the library was copied successfully or already existed, 0
+# * On error, >0
 copy_libgcc() {
 	local libdir library
 
-	libdir="$1"
-	for library in "${libdir}"/libgcc_s.so.[1-9]; do
-		copy_exec "${library}" || return
+	for libdir in $(ld.so --list-diagnostics | sed -n 's/^path.system_dirs.*="\(.*\)"$/\1/p'); do
+		for library in "${libdir}"/libgcc_s.so.[1-9]; do
+			[ -e "$library" ] || continue
+			copy_exec "${library}" || return
+		done
 	done
 }
 
@@ -306,10 +349,45 @@ copy_modules_dir()
 # walk /sys for relevant modules
 sys_walk_mod_add()
 {
-	local driver_path module device_path modalias
-	device_path="$1"
+	local driver_path module device_path modalias devlink
 
-	while [ "${device_path}" != "/sys" ]; do
+	# This is a crude way of storing two stacks in "$@" by using
+	# "--" as a separator between them, to implement iterative
+	# graph traversal over parent/supplier dependencies. The first
+	# part is device paths to traverse, the other is visited ones.
+	set -- "$1" "--"
+	while [ "$1" != "--" ]; do
+		device_path="$(readlink -f "$1")"
+		shift
+
+		# Don't walk into same path twice, avoid infinite recursion
+		case "$*" in
+			"${device_path}")     continue ;;
+			"${device_path} "*)   continue ;;
+			*" ${device_path} "*) continue ;;
+			*" ${device_path}")   continue ;;
+		esac
+
+		if [ "$device_path" = "/sys" ]; then
+			continue
+		fi
+
+		# Keep current path to add module/modalias for
+		set -- "$@" "$device_path"
+
+		# Walk into suppliers in next iteration
+		for devlink in "${device_path}/supplier:"*; do
+			if [ -d "$devlink" ]; then
+				set -- "${devlink}/supplier/" "$@"
+			fi
+		done
+
+		# Walk into parent in next iteration
+		set -- "$(dirname "$device_path")" "$@"
+	done
+	shift
+
+	for device_path in "$@"; do
 		# device modalias
 		if [ -e "${device_path}/modalias" ]; then
 			modalias=$(cat "${device_path}/modalias")
@@ -326,8 +404,6 @@ sys_walk_mod_add()
 				manual_add_modules "${module}"
 			fi
 		fi
-
-		device_path="$(dirname "${device_path}")"
 	done
 }
 
@@ -381,12 +457,18 @@ block_dev_mod_add()
 add_loaded_modules()
 {
 	local pattern="$1"
-	local module builtin
+	local module device builtin
 	builtin="/lib/modules/$(uname -r)/modules.builtin"
 
 	for module in /sys/module/$pattern; do
 		if [ -d "$module" ]; then
 			manual_add_modules "$(basename "$module")"
+		fi
+	done
+	# shellcheck disable=SC2231
+	for device in /sys/module/$pattern/drivers/*/*; do
+		if [ -d "$device" ] && [ "$(basename "$device")" != "module" ]; then
+			sys_walk_mod_add "$device"
 		fi
 	done
 	if [ -f "$builtin" ]; then
@@ -430,6 +512,14 @@ dep_add_modules_mount()
 	# but most of the commands below only work with block devices.
 	if [ "${FSTYPE}" = "ubifs" ]; then
 		manual_add_modules "${FSTYPE}"
+		return
+	fi
+
+	# Return upon finding a zfs because when used as rootfs it is
+	# not presented as a typical mount point like other fs, so that
+	# can not be handled with commands below. Since zfs has its own
+	# addons in the zfs-initramfs package, do nothing here.
+	if [ "${FSTYPE}" = "zfs" ]; then
 		return
 	fi
 
@@ -522,11 +612,12 @@ dep_add_modules()
 		class_add_modules "$class"
 	done
 
-	# clk, USB-PHY and pinctrl devices are outside the device model (!) so
-	# match loaded modules by name
+	# clk, USB-PHY, pinctrl and reset devices are outside the device
+	# model (!) so match loaded modules by name
 	add_loaded_modules 'clk[-_]*'
 	add_loaded_modules 'phy[-_]*'
 	add_loaded_modules 'pinctrl[-_]*'
+	add_loaded_modules 'reset[-_]*'
 
 	# Sys walk keyboards.  We identify keyboards as input devices
 	# that can generate at least key events 1-31; udev has the
@@ -545,7 +636,8 @@ dep_add_modules()
 	for device in /sys/bus/platform/drivers/efi-framebuffer/* \
 	              /sys/bus/platform/drivers/platform-framebuffer/* \
 	              /sys/bus/platform/drivers/simple-framebuffer/* \
-	              /sys/bus/platform/drivers/vesa-framebuffer/*; do
+	              /sys/bus/platform/drivers/vesa-framebuffer/* \
+	              /sys/bus/coreboot/drivers/framebuffer/*; do
 		if [ -d "$device" ]; then
 			walk_graphics=no
 			break
@@ -601,9 +693,11 @@ dep_add_modules()
 		modules="$modules sunvnet sunvdc"
 	fi
 
-	if [ -e /sys/devices/platform/edp-panel ]; then
-		sys_walk_mod_add /sys/devices/platform/edp-panel
-	fi
+	for device in /sys/bus/*/drivers/*panel*/*; do
+		if [ -d "$device" ] && [ "$(basename "$device")" != "module" ]; then
+			sys_walk_mod_add "$device"
+		fi
+	done
 
 	# shellcheck disable=SC2086
 	manual_add_modules $modules
@@ -612,18 +706,25 @@ dep_add_modules()
 # The modules "most" classes added per default to the initramfs
 auto_add_modules()
 {
-	local arg
+	local arg exclude exclude_dir
+	local block_modules=
 	local modules=
 
 	if [ "$#" -eq 0 ] ; then
 		set -- base net ide scsi block ata dasd firewire mmc usb_storage fb
 	fi
 
+	local blockfuncs="ahci_platform_get_resources|ata_scsi_ioctl|scsi_add_host|blk_cleanup_queue"
+	blockfuncs="${blockfuncs}|register_mtd_blktrans|scsi_esp_register|register_virtio_device"
+	blockfuncs="${blockfuncs}|usb_stor_disconnect|mmc_add_host|sdhci_add_host|scsi_add_host_with_dma"
+	blockfuncs="${blockfuncs}|blk_mq_alloc_disk|blk_mq_alloc_request|blk_mq_destroy_queue|blk_cleanup_disk"
+	blockfuncs="${blockfuncs}|dw_mc_probe|dw_mci_pltfm_register|nvme_init_ctrl"
+
 	for arg in "$@" ; do
 		case "$arg" in
 		base)
 			modules="$modules btrfs ext2 ext3 ext4 f2fs"
-			modules="$modules isofs jfs reiserfs udf xfs"
+			modules="$modules isofs jfs reiserfs squashfs udf xfs"
 			modules="$modules nfs nfsv2 nfsv3 nfsv4"
 			modules="$modules af_packet atkbd i8042 psmouse"
 			modules="$modules virtio_pci virtio_mmio"
@@ -637,15 +738,17 @@ auto_add_modules()
 			modules="$modules =drivers/usb/dwc2"
 			modules="$modules =drivers/usb/dwc3"
 			modules="$modules =drivers/usb/isp1760"
+			modules="$modules =drivers/usb/mtu3"
 			modules="$modules =drivers/usb/musb"
 			modules="$modules =drivers/usb/renesas_usbhs"
-			modules="$modules =drivers/usb/typec/tcpm"
-			# and any extcon drivers for USB
-			modules="$modules extcon-usb-gpio extcon-usbc-cros-ec"
-			# Add the axp20x_usb_power power supply driver,
-			# required to initialize the USB host controllers
-			# on a number of armhf systems
-			modules="$modules axp20x_usb_power"
+			modules="$modules =drivers/usb/typec"
+			# Add onboard_usb_hub so it can be probed before
+			# mounts, otherwise it might reset power to a
+			# USB disk already mounted as root
+			modules="$modules onboard_usb_hub onboard_usb_dev"
+
+			# needed for USB on some Qualcomm devices
+			modules="$modules =net/qrtr"
 
 			# Include all keyboard drivers and all HID drivers
 			# unless we're sure they don't support keyboards.
@@ -656,8 +759,7 @@ auto_add_modules()
 				'hid-*ff.ko' hid-a4tech.ko hid-cypress.ko \
 				hid-dr.ko hid-elecom.ko hid-gyration.ko \
 				hid-icade.ko hid-kensington.ko hid-kye.ko \
-				hid-lcpower.ko hid-magicmouse.ko \
-				hid-multitouch.ko hid-ntrig.ko \
+				hid-lcpower.ko hid-magicmouse.ko hid-ntrig.ko \
 				hid-petalynx.ko hid-picolcd.ko hid-pl.ko \
 				hid-ps3remote.ko hid-quanta.ko \
 				'hid-roccat-ko*.ko' hid-roccat-pyra.ko \
@@ -665,42 +767,50 @@ auto_add_modules()
 				hid-speedlink.ko hid-tivo.ko hid-twinhan.ko \
 				hid-uclogic.ko hid-wacom.ko hid-waltop.ko \
 				hid-wiimote.ko hid-zydacron.ko
-			# needed to access keyboard on some ChromeOS devices
-			modules="$modules cros_ec_spi"
+			modules="$modules =drivers/input/serio"
+			modules="$modules =drivers/tty/serial"
 
 			# Any of these might be needed by other drivers
 			modules="$modules =drivers/bus"
 			modules="$modules =drivers/clk"
+			modules="$modules =drivers/devfreq"
+			modules="$modules =drivers/dma"
+			modules="$modules =drivers/extcon"
 			modules="$modules =drivers/gpio"
+			modules="$modules =drivers/hwspinlock"
+			modules="$modules =drivers/interconnect"
 			modules="$modules =drivers/i2c/busses"
 			modules="$modules =drivers/i2c/muxes"
+			modules="$modules =drivers/mailbox"
+			modules="$modules =drivers/memory"
 			modules="$modules =drivers/mfd"
+			modules="$modules =drivers/nvmem"
 			modules="$modules =drivers/pci/controller"
 			modules="$modules =drivers/phy"
+			modules="$modules =drivers/platform/chrome"
+			modules="$modules =drivers/power"
 			modules="$modules =drivers/pinctrl"
 			modules="$modules =drivers/regulator"
 			modules="$modules =drivers/reset"
+			modules="$modules =drivers/rpmsg"
+			modules="$modules =drivers/soc"
 			modules="$modules =drivers/spi"
+			modules="$modules =drivers/spmi"
 			modules="$modules =drivers/usb/phy"
+			modules="$modules =drivers/watchdog"
 
 			# Needed for periodic fsck
 			modules="$modules =drivers/rtc"
 		;;
 		net)
-			copy_modules_dir kernel/drivers/net \
-				appletalk arcnet bonding can cdc-phonet.ko \
-				cdc_mbim.ko cdc_subset.ko cx82310_eth.ko \
-				dummy.ko gl620a.ko hamradio hippi hso.ko \
-				huawei_cdc_ncm.ko ifb.ko ipheth.ko irda \
-				kalmia.ko lg-vl600.ko macvlan.ko macvtap.ko \
-				net1080.ko pcmcia plusb.ko qmi_wwan.ko \
-				sb1000.ko sierra_net.ko team tokenring tun.ko \
-				veth.ko wan wimax wireless xen-netback.ko \
-				zaurus.ko
-
-			# Required to initialize Ethernet (FEC) on ARM64 iMX8M
-			# devices.
-			modules="$modules nvmem-imx-ocotp"
+			exclude="cdc_mbim|ipheth|qmi_wwan|sierra_net|tun|veth|xen-netback"
+			exclude_dir="isdn|net/(802|ethernet|llc|phy|team)|uwb|wan|wireless"
+			_call_dracut_install -P "/((${exclude})\.ko|(${exclude_dir})/)" \
+				-s "eth_type_trans|register_virtio_device|usbnet_open" \
+				"=drivers/net"
+			modules="$modules =drivers/net/ethernet =drivers/net/mdio"
+			modules="$modules =drivers/net/phy cdc_eem ch9200 ipvlan"
+			modules="$modules netconsole r8153_ecm"
 		;;
 		ide)
 			modules="$modules =drivers/ide"
@@ -709,16 +819,19 @@ auto_add_modules()
 			modules="$modules =drivers/mmc"
 		;;
 		scsi)
-			modules="$modules =drivers/scsi"
-			modules="$modules =drivers/ufs"
-			modules="$modules mptfc mptsas mptscsih mptspi zfcp"
+			_call_dracut_install -s "${blockfuncs}|iscsi_register_transport" \
+				"=drivers/message/fusion" "=drivers/s390/scsi" "=drivers/scsi"
+			# The following modules are not covered by the symbol filter
+			# in the previous call but should be included anyway.
+			modules="$modules cxgb3i cxgb4i scsi_dh_alua scsi_dh_emc"
+			modules="$modules scsi_dh_rdac scsi_transport_srp"
 		;;
 		ata)
-			modules="$modules =drivers/ata"
+			block_modules="$block_modules =drivers/ata"
 		;;
 		block)
-			modules="$modules =drivers/block"
-			modules="$modules =drivers/nvme"
+			block_modules="$block_modules =drivers/block =drivers/nvme"
+			modules="$modules =drivers/ufs"
 			modules="$modules vmd"
 		;;
 		ubi)
@@ -737,15 +850,20 @@ auto_add_modules()
 			# For machines that don't have a generic framebuffer device.
 			modules="$modules rockchipdrm pwm-cros-ec pwm_bl pwm-rockchip panel-simple"
 			modules="$modules analogix-anx6345 pwm-sun4i sun4i-drm sun8i-mixer panel-edp"
+			modules="$modules mediatek-drm pwm-mtk-disp anx7625 parade_ps8640 msm"
 			# For panel/backlight on MNT Reform 2
 			modules="$modules pwm_imx27 nwl-dsi ti-sn65dsi86 imx-dcss"
-			modules="$modules mux-mmio mxsfb imx8mq-interconnect"
+			modules="$modules mux-mmio mxsfb"
 		;;
 		esac
 	done
 
 	# shellcheck disable=SC2086
 	manual_add_modules $modules
+	if [ -n "$block_modules" ]; then
+		# shellcheck disable=SC2086
+		_call_dracut_install -s "${blockfuncs}" $block_modules
+	fi
 }
 
 # 'depmod' only looks at symbol dependencies and the 'softdep' module
@@ -796,6 +914,29 @@ hidden_dep_add_modules()
 				;;
 			dw_mmc-rockchip)
 				echo rockchip-io-domain io-domain
+				;;
+			mediatek-drm)
+				echo mediatek-drm-hdmi mtk_iommu mtk-smi
+				;;
+			mtk_iommu)
+				echo mtk-smi
+				;;
+			phy-mtk-mipi-dsi-drv)
+				echo nvmem_mtk-efuse
+				;;
+			mt6397)
+				echo mtk-pmic-wrap
+				;;
+			qmi_helpers)
+				echo qrtr
+				;;
+			panel-edp)
+				# panels don't have devlink to backlight
+				echo pwm_bl
+				;;
+			msm)
+				# DP devices which don't have devlinks
+				echo pmic_glink_altmode gpio_sbu_mux qrtr
 				;;
 			esac
 		done
@@ -903,7 +1044,7 @@ call_scripts()
 		if [ "$ec" -ne 0 ]; then
 			echo "E: ${initdir}/${cs_x} failed with return $ec." >&2
 			# only errexit on mkinitramfs
-			[ -n "${version}" ] && exit $ec
+			[ -n "${version}" ] && exit "$ec"
 		fi
 		# allow boot scripts to modify exported boot parameters
 		if [ -e /conf/param.conf ]; then
