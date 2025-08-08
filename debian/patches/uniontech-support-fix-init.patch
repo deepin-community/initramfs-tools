@@ -1,7 +1,7 @@
 Index: deepin-initramfs-tools/scripts/functions
 ===================================================================
 --- deepin-initramfs-tools.orig/scripts/functions	2025-02-12 18:21:15.678113198 +0800
-+++ deepin-initramfs-tools/scripts/functions	2025-05-09 19:44:22.926816821 +0800
++++ deepin-initramfs-tools/scripts/functions	2025-08-08 13:21:24.000000000 +0800
 @@ -71,6 +71,11 @@
  
  	run_scripts /scripts/panic
@@ -14,3 +14,37 @@ Index: deepin-initramfs-tools/scripts/functions
  	# Try to use setsid, which will enable job control in the shell
  	# and paging in more
  	if command -v setsid >/dev/null 2>&1; then
+Index: deepin-initramfs-tools/scripts/local
+===================================================================
+--- deepin-initramfs-tools.orig/scripts/local	2025-02-12 18:21:15.682113353 +0800
++++ deepin-initramfs-tools/scripts/local	2025-08-08 13:27:05.612710150 +0800
+@@ -147,6 +147,10 @@
+ 	if [ -z "${ROOT}" ]; then
+ 		panic "No root device specified. Boot arguments must include a root= parameter."
+ 	fi
++	local fix_init_file="/etc/fix-init.cfg"
++	if [ -e "$ROOT" ]; then
++		echo "ROOT_DEV=""${ROOT}" > ${fix_init_file}
++	fi
+ 	local_device_setup "${ROOT}" "root file system"
+ 	ROOT="${DEV}"
+ 
+@@ -165,12 +169,18 @@
+ 		roflag=-w
+ 	fi
+ 
++	echo "ROOT_DEV=""${ROOT}" > ${fix_init_file}
++	echo "ROOT_TYPE=""${FSTYPE}" >> ${fix_init_file}
++
+ 	checkfs "${ROOT}" root "${FSTYPE}"
+ 
+ 	# Mount root
+ 	# shellcheck disable=SC2086
+ 	if ! mount ${roflag} ${FSTYPE:+-t "${FSTYPE}"} ${ROOTFLAGS} "${ROOT}" "${rootmnt?}"; then
+ 		panic "Failed to mount ${ROOT} as root file system."
++		# Mount root
++		# shellcheck disable=SC2086
++		mount ${roflag} ${FSTYPE:+-t "${FSTYPE}"} ${ROOTFLAGS} "${ROOT}" "${rootmnt?}"
+ 	fi
+ }
+ 
