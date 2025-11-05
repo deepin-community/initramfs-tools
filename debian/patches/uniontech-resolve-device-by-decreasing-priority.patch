@@ -1,0 +1,13 @@
+diff --git a/scripts/functions b/scripts/functions
+index ae11b96..c94dc52 100644
+--- a/scripts/functions
++++ b/scripts/functions
+@@ -431,7 +431,7 @@ resolve_device() {
+ 
+ 	case "$DEV" in
+ 	LABEL=* | UUID=* | PARTLABEL=* | PARTUUID=*)
+-		DEV="$(blkid -l -t "$DEV" -o device)" || return 1
++		DEV="$(blkid -t "$DEV" -o device | tail -n 1)" || return 1
+ 		;;
+ 	esac
+ 	[ -e "$DEV" ] && echo "$DEV"
