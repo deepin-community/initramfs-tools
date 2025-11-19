@@ -1,0 +1,48 @@
+Index: deepin-initramfs-tools/scripts/functions
+===================================================================
+--- deepin-initramfs-tools.orig/scripts/functions	2025-11-18 19:15:26.000000000 +0800
++++ deepin-initramfs-tools/scripts/functions	2025-11-18 19:18:25.667908421 +0800
+@@ -393,8 +393,10 @@
+ # Wait for queued kernel/udev events
+ wait_for_udev()
+ {
+-	command -v udevadm >/dev/null 2>&1 || return 0
+-	udevadm settle ${1:+--timeout=$1}
++	# command -v udevadm >/dev/null 2>&1 || return 0
++	# udevadm settle ${1:+--timeout=$1}
++	# Not wait for udev to improve boot performance
++	return 0
+ }
+ 
+ # Find a specific fstab entry
+Index: deepin-initramfs-tools/init
+===================================================================
+--- deepin-initramfs-tools.orig/init	2025-11-18 19:15:26.000000000 +0800
++++ deepin-initramfs-tools/init	2025-11-19 10:14:48.252875762 +0800
+@@ -339,6 +339,26 @@
+ 
+ maybe_break init
+ 
++wait_for_gpu_device() {
++    local count=0
++    while [ $count -lt 400 ]; do
++        if [ -c "/dev/dri/card0" ] || [ -c "/dev/dri/card1" ] || [ -c "/dev/dri/card2" ]; then
++            return 0
++        fi
++
++        if [ ! -f "/run/udev/queue" ]; then
++            return 0
++        fi
++
++        sleep 0.005
++		log_warning_msg "No drm device,wait $count times"
++        count=$((count + 1))
++    done
++	log_warning_msg "No drm device,timeout"
++    return 1
++}
++wait_for_gpu_device || true
++
+ # don't leak too much of env - some init(8) don't clear it
+ # (keep init, rootmnt, drop_caps)
+ unset debug

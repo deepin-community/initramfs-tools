@@ -1,3 +1,9 @@
+initramfs-tools (0.142-0deepin11) unstable; urgency=medium
+
+  * not wait udev in uos to improve boot performance.
+
+ -- xinpeng.wang <wangxinpeng@uniontech.com>  Wed, 19 Nov 2025 10:55:56 +0800
+
 initramfs-tools (0.142-0deepin10) unstable; urgency=medium
 
   * resolve device by decreasing priority
