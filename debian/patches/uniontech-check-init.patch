@@ -1,14 +1,15 @@
 Index: deepin-initramfs-tools/init
 ===================================================================
 --- deepin-initramfs-tools.orig/init	2025-02-12 18:21:15.678113198 +0800
-+++ deepin-initramfs-tools/init	2025-05-13 16:21:05.820388004 +0800
-@@ -256,6 +256,44 @@
++++ deepin-initramfs-tools/init	2025-11-19 10:15:30.678861813 +0800
+@@ -256,6 +256,46 @@
  mountroot
  log_end_msg
  
 +uos_check_init() {
 +    local allowed_script="/usr/bin/deepinisocheck.sh"
 +    local os_release="/etc/os-release"
++	local default_init="/sbin/init"
 +
 +    # Only run this check on UOS systems
 +    if ! grep -q '^ID=uos$' "$os_release"; then
@@ -16,7 +17,7 @@ Index: deepin-initramfs-tools/init
 +    fi
 +
 +    # Allow specific script directly without further checks
-+    if [ "$init" = "$allowed_script" ]; then
++    if [ "$init" = "$allowed_script" ] || [ "$init" = "$default_init" ]; then
 +        return 0
 +    fi
 +
@@ -24,7 +25,7 @@ Index: deepin-initramfs-tools/init
 +    if read_fstab_entry /boot; then
 +        log_begin_msg "Mounting /boot file system"
 +        if ! mountfs /boot; then
-+            log_warn_msg "Failed to mount /boot"
++            log_warning_msg "Failed to mount /boot"
 +            return 1
 +        fi
 +        log_end_msg
@@ -32,14 +33,15 @@ Index: deepin-initramfs-tools/init
 +        # Check GRUB config for password_pbkdf2 (menu encryption)
 +        local grub_cfg="${rootmnt}/boot/grub/grub.cfg"
 +        if [ -f "$grub_cfg" ] && ! grep -q '^password_pbkdf2' "$grub_cfg"; then
-+            log_warn_msg "GRUB encryption not detected, resetting init to default: /sbin/init"
-+            init=/sbin/init
++            log_warning_msg "GRUB encryption not detected, resetting init to default: /sbin/init"
++            init=$default_init
 +        fi
 +
 +        # Unmount /boot after use
 +        umount "${rootmnt}/boot"
 +    else
-+        log_warn_msg "/boot not found in fstab, skipping GRUB encryption check"
++        log_warning_msg "/boot not found in fstab, skipping GRUB encryption check"
++		init=$default_init
 +    fi
 +}
 +uos_check_init
