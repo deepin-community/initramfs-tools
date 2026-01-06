@@ -1,3 +1,9 @@
+initramfs-tools (0.142-0deepin12) unstable; urgency=medium
+
+  * Improve boot performance using lz4.
+
+ -- lichenggang <lichenggang@deepin.org>  Tue, 06 Jan 2026 15:25:30 +0800
+
 initramfs-tools (0.142-0deepin11) unstable; urgency=medium
 
   * not wait udev in uos to improve boot performance.

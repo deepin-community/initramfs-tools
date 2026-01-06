@@ -6,3 +6,4 @@ uniontech-wait_udev_in_s4.patch
 uniontech-support-fix-init.patch
 uniontech-check-init.patch
 uniontech-resolve-device-by-decreasing-priority.patch
+uniontech-Improve-boot-performance-using-lz4.patch

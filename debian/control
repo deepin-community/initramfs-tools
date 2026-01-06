@@ -34,6 +34,7 @@ Depends: coreutils (>= 8.24),
          logsave | e2fsprogs (<< 1.45.3-1~),
          udev,
          zstd,
+         lz4,
          ${misc:Depends}
 Suggests: bash-completion
 Breaks: initramfs-tools (<< 0.121~), ${busybox:Breaks}
