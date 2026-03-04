@@ -1,0 +1,152 @@
+Index: deepin-initramfs-tools/init
+===================================================================
+--- deepin-initramfs-tools.orig/init
++++ deepin-initramfs-tools/init
+@@ -256,6 +256,147 @@ mount_premount
+ mountroot
+ log_end_msg
+ 
++REAL_BOOT=${BOOT}
++if [ -e "${rootmnt}/live.flag" ]; then
++        mount -o rw,remount ${rootmnt} 2>/dev/null
++        rm -f ${rootmnt}/live.flag
++        REAL_BOOT=live
++        log_warning_msg "Switch to live mode."
++fi
++
++if [ -e "${rootmnt}/SystemdLocalfsDependencyFailed.flag" ]; then
++	mount -o rw,remount ${rootmnt} 2>/dev/null
++	rm ${rootmnt}/SystemdLocalfsDependencyFailed.flag
++	if [ "${REAL_BOOT}" != "live" ]; then
++		panic
++	fi
++fi
++
++# Clean up the "/tmp/*" directory in the system disk to ensure that the available space of the
++# "/" directory is > 500K
++clean_system_disk() {
++    # Define local variables
++    local rootDiskStandard=500           # Required free space: > 500KB
++    local RootIsFullFile="RootIsFull.flag"
++    local RootIsFullFilePath="${rootmnt}/${RootIsFullFile}"
++    local root_disk_cleaned_space=""
++
++    # 1. Check if RootIsFull.flag exists
++    if [ ! -e "${RootIsFullFilePath}" ]; then
++        log_success_msg "${RootIsFullFilePath} not found. Skipping system disk cleanup."
++        return 0
++    fi
++
++    # 2. Try to remount root as read-write (best effort)
++    if ! mount -o rw,remount "${rootmnt}" 2>/dev/null; then
++        log_warning_msg "Failed to remount ${rootmnt} as rw. Proceeding anyway."
++        # Do not panic on remount failure and need to check free space
++    fi
++
++    # 3. Clean up /tmp directory
++    rm -rf "${rootmnt}/tmp/"* 2>/dev/null || true
++
++    # 4. Get available space on root filesystem (in KB)
++    root_disk_cleaned_space=$(df -Bk "${rootmnt}" | awk 'END { print $(NF-2) }')
++
++    # 5. Only panic if we successfully got a valid number AND it's <= threshold
++    if [ -n "${root_disk_cleaned_space}" ] && echo "${root_disk_cleaned_space}" | grep -qE '^[0-9]+$'; then
++        if [ "${root_disk_cleaned_space}" -gt "${rootDiskStandard}" ]; then
++            # Sufficient space
++            rm -f "${RootIsFullFilePath}" || true
++            log_success_msg "System disk cleanup successful. Sufficient space: ${root_disk_cleaned_space} KB. Flag removed."
++        else
++            # Space is insufficient (valid measurement, but too small)
++            echo "CRITICAL: Root disk space insufficient after cleanup: ${root_disk_cleaned_space} KB <= ${rootDiskStandard} KB"
++            echo "We must ensure / available size > ${rootDiskStandard} KB"
++            panic
++        fi
++    else
++        # Failed to get valid space value (e.g., df failed, awk no match, etc.)
++        log_warning_msg "Could not get valid available space for ${rootmnt}. Assuming sufficient space."
++    fi
++}
++
++
++
++# Clean up data disk space by leveraging the existing bind-mounted /root/var.
++# This ensures we are cleaning the persistent data even in an OSTree/OverlayFS environment.
++# Target: /root/var/cache/apt/archives and /root/var/log
++# Requirement: Ensure available space > 100MB
++clean_data_disk() {
++    # Define local variables
++    local log_disk_threshold=20         # Threshold to clean logs (in MB)
++    local data_disk_threshold=100       # Minimum required free space (in MB)
++    local DataIsFullFile="DataIsFull.flag"
++    local DataIsFullFilePath="${rootmnt}/${DataIsFullFile}"
++    local target_var="${rootmnt}/var"   # In initramfs, this is usually the bind mount to vda5/persistent/var
++    local log_used_dir_space=0
++    local data_disk_cleaned_space=""
++
++    # 1. Check if the flag file exists
++    if [ ! -e "${DataIsFullFilePath}" ]; then
++        log_success_msg "${DataIsFullFilePath} not found. Skipping data disk cleanup."
++        return 0
++    fi
++
++    # 2. Remount /root/var as read-write to allow deletion
++    # Note: Even if rootmnt is rw, bind mounts may need individual remounting
++    if ! mount -o rw,remount "${target_var}" 2>/dev/null; then
++        log_warning_msg "Failed to remount ${target_var} as rw. Attempting to proceed anyway."
++    fi
++
++    # 3. Clean APT archives
++    # Path in v25: /var/cache/apt/archives/
++    local apt_cache_path="${target_var}/cache/apt/archives"
++    if [ -d "${apt_cache_path}" ]; then
++        log_success_msg "Cleaning APT cache: ${apt_cache_path}"
++        rm -rf "${apt_cache_path}/"* 2>/dev/null || true
++    fi
++
++    # 4. Clean /var/log if it exceeds the threshold
++    local log_path="${target_var}/log"
++    if [ -d "${log_path}" ]; then
++        # Calculate used space in MB
++        log_used_dir_space=$(du -sm "${log_path}" 2>/dev/null | awk '{print $1}' || echo "")
++
++        if [ -n "${log_used_dir_space}" ] && echo "${log_used_dir_space}" | grep -qE '^[0-9]+$'; then
++            if [ "${log_used_dir_space}" -gt "${log_disk_threshold}" ]; then
++                log_warning_msg "Log size (${log_used_dir_space}MB) exceeds threshold (${log_disk_threshold}MB). Cleaning..."
++                # Delete contents but keep the directory structure
++                rm -rf "${log_path}/"* 2>/dev/null || true
++            fi
++        else
++            log_warning_msg "Could not determine size of ${log_path}, skipping log cleanup."
++        fi
++    fi
++
++    # 5. Get available space after cleanup (in MB)
++    # df -Bm shows size in MB blocks. $(NF-2) is the 'Available' column.
++    data_disk_cleaned_space=$(df -Bm "${target_var}" 2>/dev/null | awk 'END { print $(NF-2) }')
++
++    # 6. Verify space and handle flags
++    if [ -n "${data_disk_cleaned_space}" ] && echo "${data_disk_cleaned_space}" | grep -qE '^[0-9]+$'; then
++        if [ "${data_disk_cleaned_space}" -lt "${data_disk_threshold}" ]; then
++            # Critical failure: Space is still insufficient
++            echo "CRITICAL: Data disk space insufficient after cleanup: ${data_disk_cleaned_space} MB < ${data_disk_threshold} MB"
++            echo "Path: ${target_var}"
++            panic
++        else
++            # Success: Space is enough, remove the flag to allow normal boot
++            rm -f "${DataIsFullFilePath}" || true
++            log_success_msg "Data disk check passed. Available space: ${data_disk_cleaned_space} MB. Flag removed."
++        fi
++    else
++        log_warning_msg "Could not get valid available space for ${target_var}. Assuming sufficient space."
++    fi
++}
++
++if [ "${REAL_BOOT}" != "live" ]; then
++	clean_system_disk
++	clean_data_disk
++fi
++
++
+ uos_check_init() {
+     local allowed_script="/usr/bin/deepinisocheck.sh"
+     local os_release="/etc/os-release"
