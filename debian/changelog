@@ -1,3 +1,9 @@
+initramfs-tools (0.142-0deepin13) unstable; urgency=medium
+
+  * Implement disk cleanup mechanism in initramfs to handle full disk scenarios.
+
+ -- xinpeng.wang <wangxinpeng@uniontech.com>  Wed, 04 Mar 2026 15:08:13 +0800
+
 initramfs-tools (0.142-0deepin12) unstable; urgency=medium
 
   * Improve boot performance using lz4.
